@@ -1,0 +1,182 @@
+name: Telemost API
+
+on:
+  # Запуск по webhook из твоего сайта
+  repository_dispatch:
+    types: [create_room, join_room, approve_user, reject_user, get_room]
+  
+  # Для ручного теста
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Действие'
+        required: true
+        default: 'get_room'
+        type: choice
+        options:
+        - create_room
+        - join_room
+        - approve_user
+        - reject_user
+        - get_room
+      room_name:
+        description: 'Название комнаты'
+        required: false
+      password:
+        description: 'Пароль'
+        required: false
+      user_id:
+        description: 'ID пользователя'
+        required: false
+
+jobs:
+  handle-action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Run action
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const action = context.payload.action || context.payload.inputs?.action;
+            const roomName = context.payload.client_payload?.room_name || context.payload.inputs?.room_name;
+            const password = context.payload.client_payload?.password || context.payload.inputs?.password;
+            const userId = context.payload.client_payload?.user_id || context.payload.inputs?.user_id;
+            
+            // Файл для хранения данных комнат
+            const fs = require('fs');
+            const roomsFile = 'rooms.json';
+            
+            let rooms = {};
+            if (fs.existsSync(roomsFile)) {
+              rooms = JSON.parse(fs.readFileSync(roomsFile, 'utf8'));
+            }
+            
+            switch(action) {
+              case 'create_room':
+                if (rooms[roomName]) {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.payload.client_payload?.issue_number || 1,
+                    body: JSON.stringify({ success: false, error: 'Room exists' })
+                  });
+                  return;
+                }
+                
+                rooms[roomName] = {
+                  password: password,
+                  adminId: userId,
+                  created: Date.now(),
+                  waiting: [],
+                  approved: []
+                };
+                
+                fs.writeFileSync(roomsFile, JSON.stringify(rooms, null, 2));
+                
+                // Сохраняем adminId в secret для безопасности
+                await github.rest.actions.createOrUpdateRepoSecret({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  secret_name: `ADMIN_${roomName}`,
+                  encrypted_value: userId
+                });
+                
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.client_payload?.issue_number || 1,
+                  body: JSON.stringify({ success: true, roomName: roomName, adminId: userId })
+                });
+                break;
+                
+              case 'join_room':
+                if (!rooms[roomName]) {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.payload.client_payload?.issue_number || 1,
+                    body: JSON.stringify({ success: false, error: 'Room not found' })
+                  });
+                  return;
+                }
+                
+                if (rooms[roomName].password !== password) {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.payload.client_payload?.issue_number || 1,
+                    body: JSON.stringify({ success: false, error: 'Wrong password' })
+                  });
+                  return;
+                }
+                
+                rooms[roomName].waiting.push({ userId: userId, timestamp: Date.now() });
+                fs.writeFileSync(roomsFile, JSON.stringify(rooms, null, 2));
+                
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.client_payload?.issue_number || 1,
+                  body: JSON.stringify({ success: true, status: 'waiting' })
+                });
+                break;
+                
+              case 'approve_user':
+                if (rooms[roomName] && rooms[roomName].waiting) {
+                  const waitingIndex = rooms[roomName].waiting.findIndex(u => u.userId === userId);
+                  if (waitingIndex !== -1) {
+                    const approvedUser = rooms[roomName].waiting.splice(waitingIndex, 1)[0];
+                    rooms[roomName].approved.push(approvedUser.userId);
+                    fs.writeFileSync(roomsFile, JSON.stringify(rooms, null, 2));
+                  }
+                }
+                
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.client_payload?.issue_number || 1,
+                  body: JSON.stringify({ success: true })
+                });
+                break;
+                
+              case 'reject_user':
+                if (rooms[roomName] && rooms[roomName].waiting) {
+                  rooms[roomName].waiting = rooms[roomName].waiting.filter(u => u.userId !== userId);
+                  fs.writeFileSync(roomsFile, JSON.stringify(rooms, null, 2));
+                }
+                
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.client_payload?.issue_number || 1,
+                  body: JSON.stringify({ success: true })
+                });
+                break;
+                
+              case 'get_room':
+                const room = rooms[roomName] || null;
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.client_payload?.issue_number || 1,
+                  body: JSON.stringify({ success: true, room: room })
+                });
+                break;
+                
+              default:
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.client_payload?.issue_number || 1,
+                  body: JSON.stringify({ success: false, error: 'Unknown action' })
+                });
+            }
