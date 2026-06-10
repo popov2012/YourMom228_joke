@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Телемост - Вход</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 450px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { margin-bottom: 10px; color: #333; }
+        .sub { color: #666; margin-bottom: 30px; font-size: 14px; }
+        .btn-group { display: flex; gap: 15px; margin-bottom: 30px; }
+        button {
+            flex: 1;
+            padding: 14px;
+            font-size: 16px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+        .create-btn { background: #4CAF50; color: white; }
+        .join-btn { background: #2196F3; color: white; }
+        button:hover { transform: translateY(-2px); opacity: 0.9; }
+        input {
+            width: 100%;
+            padding: 14px;
+            margin: 10px 0;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+        }
+        input:focus { outline: none; border-color: #764ba2; }
+        .hidden { display: none; }
+        .error { color: #e74c3c; margin-top: 12px; font-size: 14px; }
+        .card-title { font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #333; }
+        .info { font-size: 12px; color: #999; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 Телемост</h1>
+        <div class="sub">Видеосвязь с подтверждением входа</div>
+
+        <div class="btn-group">
+            <button class="create-btn" id="showCreateBtn">➕ Создать комнату</button>
+            <button class="join-btn" id="showJoinBtn">🔗 Присоединиться</button>
+        </div>
+
+        <div id="createForm" class="hidden">
+            <div class="card-title">Создать новую комнату</div>
+            <input type="text" id="createRoomName" placeholder="Название комнаты">
+            <input type="password" id="createPassword" placeholder="Пароль">
+            <button class="create-btn" id="createBtn">Создать</button>
+            <div id="createError" class="error"></div>
+        </div>
+
+        <div id="joinForm" class="hidden">
+            <div class="card-title">Присоединиться к комнате</div>
+            <input type="text" id="joinRoomName" placeholder="Название комнаты">
+            <input type="password" id="joinPassword" placeholder="Пароль">
+            <button class="join-btn" id="joinBtn">Присоединиться</button>
+            <div id="joinError" class="error"></div>
+        </div>
+
+        <div class="info">💡 Комнаты хранятся в браузере админа. Пока админ онлайн — комната работает.</div>
+    </div>
+
+    <script>
+        // Показываем формы
+        document.getElementById('showCreateBtn').onclick = () => {
+            document.getElementById('createForm').classList.remove('hidden');
+            document.getElementById('joinForm').classList.add('hidden');
+        };
+
+        document.getElementById('showJoinBtn').onclick = () => {
+            document.getElementById('joinForm').classList.remove('hidden');
+            document.getElementById('createForm').classList.add('hidden');
+        };
+
+        // Создание комнаты
+        document.getElementById('createBtn').onclick = () => {
+            const roomName = document.getElementById('createRoomName').value.trim();
+            const password = document.getElementById('createPassword').value;
+            const errorDiv = document.getElementById('createError');
+            errorDiv.textContent = '';
+
+            if (!roomName || !password) {
+                errorDiv.textContent = 'Заполните все поля';
+                return;
+            }
+
+            const rooms = JSON.parse(localStorage.getItem('rooms') || '{}');
+            if (rooms[roomName]) {
+                errorDiv.textContent = 'Комната уже существует';
+                return;
+            }
+
+            const adminId = Math.random().toString(36).substring(2, 10);
+            rooms[roomName] = {
+                password: password,
+                adminId: adminId,
+                created: Date.now(),
+                users: []
+            };
+            localStorage.setItem('rooms', JSON.stringify(rooms));
+
+            sessionStorage.setItem('admin_session', JSON.stringify({
+                roomName: roomName,
+                adminId: adminId
+            }));
+
+            window.location.href = `admin.html?room=${encodeURIComponent(roomName)}`;
+        };
+
+        // Присоединение к комнате
+        document.getElementById('joinBtn').onclick = () => {
+            const roomName = document.getElementById('joinRoomName').value.trim();
+            const password = document.getElementById('joinPassword').value;
+            const errorDiv = document.getElementById('joinError');
+            errorDiv.textContent = '';
+
+            if (!roomName || !password) {
+                errorDiv.textContent = 'Заполните все поля';
+                return;
+            }
+
+            const rooms = JSON.parse(localStorage.getItem('rooms') || '{}');
+            const room = rooms[roomName];
+
+            if (!room) {
+                errorDiv.textContent = 'Комната не найдена';
+                return;
+            }
+
+            if (room.password !== password) {
+                errorDiv.textContent = 'Неверный пароль';
+                return;
+            }
+
+            const userId = Math.random().toString(36).substring(2, 10);
+
+            sessionStorage.setItem('user_session', JSON.stringify({
+                roomName: roomName,
+                userId: userId
+            }));
+
+            const waiting = JSON.parse(localStorage.getItem(`waiting_${roomName}`) || '[]');
+            waiting.push({ userId: userId, status: 'waiting', timestamp: Date.now() });
+            localStorage.setItem(`waiting_${roomName}`, JSON.stringify(waiting));
+
+            window.location.href = `waiting.html?room=${encodeURIComponent(roomName)}&userId=${userId}`;
+        };
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomFromUrl = urlParams.get('room');
+        if (roomFromUrl) {
+            document.getElementById('joinRoomName').value = roomFromUrl;
+            document.getElementById('showJoinBtn').click();
+        }
+    </script>
+</body>
+</html>

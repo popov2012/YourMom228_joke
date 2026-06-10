@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель администратора - Телемост</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { color: #333; margin-bottom: 10px; }
+        .room-code {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 20px 0;
+            word-break: break-all;
+        }
+        .user-card {
+            background: #f9f9f9;
+            padding: 16px;
+            margin: 12px 0;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .user-id {
+            font-family: monospace;
+            font-size: 12px;
+            color: #666;
+        }
+        button.approve {
+            background: #27ae60;
+            color: white;
+            padding: 8px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button.reject {
+            background: #e74c3c;
+            color: white;
+            padding: 8px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-left: 8px;
+            font-weight: 600;
+        }
+        .empty {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+        }
+        .share-link {
+            background: #e8e8ff;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 20px 0;
+            word-break: break-all;
+        }
+        .danger {
+            background: #e74c3c;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 20px;
+            font-weight: 600;
+            width: 100%;
+        }
+        .danger:hover { background: #c0392b; }
+        .copy-btn {
+            background: #764ba2;
+            color: white;
+            padding: 5px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        h3 { margin: 20px 0 10px 0; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👑 Панель администратора</h1>
+        <p>Комната: <strong id="roomName"></strong></p>
+
+        <div class="share-link">
+            🔗 <strong>Ссылка для приглашения:</strong><br>
+            <code id="inviteLink"></code>
+            <button class="copy-btn" onclick="copyLink()">Копировать</button>
+        </div>
+
+        <h3>👥 Зал ожидания</h3>
+        <div id="waitingList"></div>
+
+        <button class="danger" onclick="closeRoom()">🚪 Закрыть комнату (удалить)</button>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomName = urlParams.get('room');
+
+        document.getElementById('roomName').textContent = roomName;
+        document.getElementById('inviteLink').textContent = window.location.origin + '/index.html?room=' + encodeURIComponent(roomName);
+
+        function copyLink() {
+            navigator.clipboard.writeText(document.getElementById('inviteLink').textContent);
+            alert('Ссылка скопирована!');
+        }
+
+        function loadWaiting() {
+            const waiting = JSON.parse(localStorage.getItem(`waiting_${roomName}`) || '[]');
+            const waitingUsers = waiting.filter(u => u.status === 'waiting');
+
+            const listDiv = document.getElementById('waitingList');
+            if (waitingUsers.length === 0) {
+                listDiv.innerHTML = '<div class="empty">✨ Нет ожидающих пользователей</div>';
+                return;
+            }
+
+            listDiv.innerHTML = '';
+            waitingUsers.forEach(user => {
+                const div = document.createElement('div');
+                div.className = 'user-card';
+                div.innerHTML = `
+                    <div>
+                        <div>👤 Пользователь</div>
+                        <div class="user-id">ID: ${user.userId}</div>
+                    </div>
+                    <div>
+                        <button class="approve" onclick="handleUser('${user.userId}', 'approved')">✅ Подтвердить</button>
+                        <button class="reject" onclick="handleUser('${user.userId}', 'rejected')">❌ Отказать</button>
+                    </div>
+                `;
+                listDiv.appendChild(div);
+            });
+        }
+
+        function handleUser(userId, status) {
+            const waiting = JSON.parse(localStorage.getItem(`waiting_${roomName}`) || '[]');
+            const index = waiting.findIndex(u => u.userId === userId);
+            if (index !== -1) {
+                waiting[index].status = status;
+                localStorage.setItem(`waiting_${roomName}`, JSON.stringify(waiting));
+                loadWaiting();
+            }
+        }
+
+        function closeRoom() {
+            if (confirm('⚠️ Вы уверены? Комната будет удалена.')) {
+                const rooms = JSON.parse(localStorage.getItem('rooms') || '{}');
+                delete rooms[roomName];
+                localStorage.setItem('rooms', JSON.stringify(rooms));
+                localStorage.removeItem(`waiting_${roomName}`);
+                window.location.href = 'index.html';
+            }
+        }
+
+        setInterval(loadWaiting, 2000);
+        loadWaiting();
+
+        let lastActivity = Date.now();
+        setInterval(() => {
+            if (Date.now() - lastActivity > 600000) {
+                const rooms = JSON.parse(localStorage.getItem('rooms') || '{}');
+                delete rooms[roomName];
+                localStorage.setItem('rooms', JSON.stringify(rooms));
+                localStorage.removeItem(`waiting_${roomName}`);
+                window.location.href = 'index.html';
+            }
+        }, 60000);
+
+        ['mousemove', 'click', 'keypress'].forEach(event => {
+            document.addEventListener(event, () => lastActivity = Date.now());
+        });
+    </script>
+</body>
+</html>

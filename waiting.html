@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Зал ожидания - Телемост</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 24px;
+            padding: 50px;
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #f0f0f0;
+            border-top: 4px solid #764ba2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 30px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        h2 { color: #333; margin-bottom: 20px; }
+        #status { font-size: 16px; color: #666; margin-top: 20px; }
+        .approved { color: #27ae60; }
+        .rejected { color: #e74c3c; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>⏳ Зал ожидания</h2>
+        <div class="spinner" id="spinner"></div>
+        <p id="status">Ожидание подтверждения от администратора...</p>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomName = urlParams.get('room');
+        const userId = urlParams.get('userId');
+
+        function checkStatus() {
+            const waiting = JSON.parse(localStorage.getItem(`waiting_${roomName}`) || '[]');
+            const user = waiting.find(u => u.userId === userId);
+
+            if (user) {
+                if (user.status === 'approved') {
+                    document.getElementById('status').innerHTML = '✅ Доступ разрешен! Перенаправление...';
+                    document.getElementById('status').className = 'approved';
+                    document.getElementById('spinner').style.display = 'none';
+                    setTimeout(() => {
+                        window.location.href = `room.html?room=${encodeURIComponent(roomName)}&userId=${userId}`;
+                    }, 1000);
+                } else if (user.status === 'rejected') {
+                    document.getElementById('status').innerHTML = '❌ Доступ отклонён администратором';
+                    document.getElementById('status').className = 'rejected';
+                    document.getElementById('spinner').style.display = 'none';
+                }
+            }
+
+            // Проверяем, не закрыта ли комната
+            const rooms = JSON.parse(localStorage.getItem('rooms') || '{}');
+            if (!rooms[roomName]) {
+                document.getElementById('status').innerHTML = '🚪 Комната закрыта администратором';
+                document.getElementById('status').className = 'rejected';
+                document.getElementById('spinner').style.display = 'none';
+            }
+        }
+
+        setInterval(checkStatus, 2000);
+        checkStatus();
+    </script>
+</body>
+</html>

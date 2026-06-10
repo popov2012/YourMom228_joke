@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Телемост - Комната</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 24px;
+            padding: 60px;
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { color: #333; margin-bottom: 20px; }
+        .video-placeholder {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            padding: 60px;
+            margin: 30px 0;
+            color: white;
+            font-size: 18px;
+        }
+        button {
+            padding: 12px 30px;
+            background: #764ba2;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover { transform: translateY(-2px); background: #5a3a7a; }
+        .room-name {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Вы в телемосте!</h1>
+        <div class="video-placeholder">
+            🎥 Зона видеосвязи<br>
+            <small>(здесь будет WebRTC)</small>
+        </div>
+        <button onclick="exitRoom()">🚪 Покинуть комнату</button>
+        <div class="room-name" id="roomName"></div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomName = urlParams.get('room');
+
+        document.getElementById('roomName').innerHTML = 'Комната: <strong>' + roomName + '</strong>';
+
+        function exitRoom() {
+            window.location.href = 'index.html';
+        }
+
+        setInterval(() => {
+            const rooms = JSON.parse(localStorage.getItem('rooms') || '{}');
+            if (!rooms[roomName]) {
+                alert('🚪 Комната закрыта администратором');
+                window.location.href = 'index.html';
+            }
+        }, 5000);
+    </script>
+</body>
+</html>
