@@ -2,12 +2,11 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Телемост - GitHub Issues</title>
+    <title>Телемост</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: Arial, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -19,61 +18,40 @@
             background: white;
             border-radius: 24px;
             padding: 40px;
-            max-width: 550px;
+            max-width: 500px;
             width: 100%;
             text-align: center;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
-        h1 { margin-bottom: 10px; color: #333; }
-        .sub { color: #666; margin-bottom: 30px; font-size: 14px; }
+        h1 { margin-bottom: 20px; }
         .btn-group { display: flex; gap: 15px; margin-bottom: 30px; }
         button {
             flex: 1;
-            padding: 14px;
-            font-size: 16px;
+            padding: 12px;
             border: none;
-            border-radius: 12px;
+            border-radius: 10px;
             cursor: pointer;
-            font-weight: 600;
-            transition: 0.2s;
+            font-weight: bold;
         }
         .create-btn { background: #4CAF50; color: white; }
         .join-btn { background: #2196F3; color: white; }
-        button:hover { transform: translateY(-2px); opacity: 0.9; }
         input {
             width: 100%;
-            padding: 14px;
+            padding: 12px;
             margin: 10px 0;
-            border: 2px solid #e0e0e0;
-            border-radius: 12px;
-            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
         }
-        input:focus { outline: none; border-color: #764ba2; }
         .hidden { display: none; }
-        .error { color: #e74c3c; margin-top: 12px; font-size: 14px; }
-        .success { color: #27ae60; margin-top: 12px; }
-        .card-title { font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #333; }
-        .info { font-size: 12px; color: #999; margin-top: 20px; }
+        .error { color: red; margin-top: 10px; }
+        .loading { color: #666; margin-top: 10px; }
         .user-card {
             background: #f9f9f9;
             padding: 15px;
             margin: 10px 0;
-            border-radius: 12px;
+            border-radius: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .waiting-list { margin-top: 20px; max-height: 400px; overflow-y: auto; }
-        .empty { text-align: center; color: #999; padding: 30px; }
-        .share-link {
-            background: #e8e8ff;
-            padding: 12px;
-            border-radius: 12px;
-            margin: 15px 0;
-            word-break: break-all;
-            font-size: 12px;
         }
         .danger {
             background: #e74c3c;
@@ -82,474 +60,250 @@
             border: none;
             border-radius: 8px;
             cursor: pointer;
-            margin-top: 15px;
+            margin-top: 20px;
             width: 100%;
         }
-        .copy-btn {
-            background: #764ba2;
-            color: white;
-            padding: 4px 10px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            margin-left: 8px;
-            font-size: 12px;
-        }
-        .status-badge {
-            font-size: 11px;
-            padding: 2px 8px;
-            border-radius: 12px;
-            background: #ffeaa7;
-            display: inline-block;
-            margin-top: 5px;
-        }
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid #f0f0f0;
-            border-top: 3px solid #764ba2;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin: 20px auto;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        nav { margin-bottom: 20px; }
-        .nav-btn {
-            background: #e0e0e0;
-            color: #333;
-            padding: 8px 16px;
-            font-size: 14px;
-            margin: 0 5px;
-        }
-        .loading { color: #666; font-size: 12px; margin-top: 10px; }
-        .user-id { font-size: 11px; color: #666; margin-top: 3px; }
     </style>
 </head>
 <body>
 <div class="container" id="app">
-    <nav>
-        <button class="nav-btn" onclick="showPage('main')">🏠 Главная</button>
-        <button class="nav-btn" onclick="showPage('admin')">👑 Админ панель</button>
-    </nav>
-
-    <div id="mainPage">
-        <h1>🎥 Телемост</h1>
-        <div class="sub">Видеосвязь с подтверждением входа</div>
-
-        <div class="btn-group">
-            <button class="create-btn" onclick="showCreateForm()">➕ Создать комнату</button>
-            <button class="join-btn" onclick="showJoinForm()">🔗 Присоединиться</button>
-        </div>
-
-        <div id="createFormDiv" class="hidden">
-            <div class="card-title">Создать новую комнату</div>
-            <input type="text" id="newRoomName" placeholder="Название комнаты">
-            <input type="password" id="newRoomPass" placeholder="Пароль">
-            <button class="create-btn" onclick="createRoom()">Создать</button>
-            <div id="createMsg" class="error"></div>
-        </div>
-
-        <div id="joinFormDiv" class="hidden">
-            <div class="card-title">Присоединиться к комнате</div>
-            <input type="text" id="joinRoomName" placeholder="Название комнаты">
-            <input type="password" id="joinRoomPass" placeholder="Пароль">
-            <button class="join-btn" onclick="joinRoom()">Присоединиться</button>
-            <div id="joinMsg" class="error"></div>
-        </div>
-
-        <div class="info">💡 Комнаты хранятся в GitHub Issues. Админ подтверждает вход через эмодзи ✅ ❌</div>
+    <h1>🎥 Телемост</h1>
+    
+    <div class="btn-group">
+        <button class="create-btn" onclick="showCreate()">➕ Создать комнату</button>
+        <button class="join-btn" onclick="showJoin()">🔗 Присоединиться</button>
     </div>
-
-    <div id="adminPage" class="hidden">
-        <h1>👑 Панель администратора</h1>
-        <div id="adminRoomInfo"></div>
-        <div class="share-link" id="shareLink"></div>
-        <h3>👥 Зал ожидания</h3>
-        <div id="waitingList" class="waiting-list"></div>
+    
+    <div id="createForm" class="hidden">
+        <input type="text" id="roomName" placeholder="Название комнаты">
+        <input type="password" id="password" placeholder="Пароль">
+        <button class="create-btn" onclick="createRoom()">Создать</button>
+        <div id="createMsg" class="error"></div>
+        <div id="createLoading" class="loading"></div>
+    </div>
+    
+    <div id="joinForm" class="hidden">
+        <input type="text" id="joinRoomName" placeholder="Название комнаты">
+        <input type="password" id="joinPassword" placeholder="Пароль">
+        <button class="join-btn" onclick="joinRoom()">Присоединиться</button>
+        <div id="joinMsg" class="error"></div>
+        <div id="joinLoading" class="loading"></div>
+    </div>
+    
+    <div id="adminPanel" class="hidden">
+        <p>Комната: <strong id="adminRoomName"></strong></p>
+        <div id="waitingList"></div>
         <button class="danger" onclick="closeRoom()">🚪 Закрыть комнату</button>
-        <div id="adminLoading" class="loading"></div>
+    </div>
+    
+    <div id="waitingPanel" class="hidden">
+        <div class="spinner" style="width:40px;height:40px;border:3px solid #f0f0f0;border-top:3px solid #764ba2;border-radius:50%;animation:spin 0.8s linear infinite;margin:20px auto;"></div>
+        <p id="waitingStatus">Ожидание подтверждения...</p>
+    </div>
+    
+    <div id="videoPanel" class="hidden">
+        <h2>🎬 Вы в телемосте!</h2>
+        <p>Здесь будет видеосвязь</p>
+        <button onclick="location.reload()">🚪 Выйти</button>
     </div>
 </div>
 
+<style>
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+
 <script>
-    // ==================== НАСТРОЙКИ GITHUB ====================
-    const GITHUB_REPO = 'popov2012/YourMom228_joke';
-    const GITHUB_TOKEN = 'github_pat_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';
-
-    let currentRoom = null;
-    let refreshInterval = null;
-
-    async function githubApi(endpoint, method = 'GET', body = null) {
-        const url = `https://api.github.com/repos/${GITHUB_REPO}/${endpoint}`;
-        const options = {
-            method: method,
-            headers: {
-                'Authorization': `token ${GITHUB_TOKEN}`,
-                'Accept': 'application/vnd.github.v3+json',
-                'Content-Type': 'application/json'
+    const REPO = 'popov2012/YourMom228_joke';
+    
+    async function callWorkflow(action, payload, issueNumber = null) {
+        // Создаём issue как канал связи
+        let issueNum = issueNumber;
+        
+        if (!issueNum) {
+            const response = await fetch(`https://api.github.com/repos/${REPO}/issues`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: `telemost-${Date.now()}`, body: 'temporary' })
+            });
+            const issue = await response.json();
+            issueNum = issue.number;
+        }
+        
+        // Триггерим workflow через repository_dispatch
+        const dispatchResponse = await fetch(`https://api.github.com/repos/${REPO}/dispatches`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                event_type: action,
+                client_payload: { ...payload, issue_number: issueNum }
+            })
+        });
+        
+        if (!dispatchResponse.ok) throw new Error('Failed to trigger workflow');
+        
+        // Ждём ответа от workflow (проверяем комментарии в issue)
+        let attempts = 0;
+        while (attempts < 30) {
+            await new Promise(r => setTimeout(r, 2000));
+            const commentsResponse = await fetch(`https://api.github.com/repos/${REPO}/issues/${issueNum}/comments`);
+            const comments = await commentsResponse.json();
+            const lastComment = comments[comments.length - 1];
+            
+            if (lastComment && lastComment.user.type === 'Bot') {
+                try {
+                    const result = JSON.parse(lastComment.body);
+                    return result;
+                } catch(e) {}
             }
-        };
-        if (body) options.body = JSON.stringify(body);
-
-        const response = await fetch(url, options);
-        if (!response.ok) {
-            throw new Error(`GitHub API error: ${response.status}`);
+            attempts++;
         }
-        return await response.json();
+        
+        throw new Error('Workflow timeout');
     }
-
-    function showPage(page) {
-        document.getElementById('mainPage').classList.add('hidden');
-        document.getElementById('adminPage').classList.add('hidden');
-        if (page === 'main') {
-            document.getElementById('mainPage').classList.remove('hidden');
-            if (refreshInterval) clearInterval(refreshInterval);
-        } else {
-            document.getElementById('adminPage').classList.remove('hidden');
-            loadAdminData();
-            if (refreshInterval) clearInterval(refreshInterval);
-            refreshInterval = setInterval(loadAdminData, 5000);
-        }
-    }
-
-    function showCreateForm() {
-        document.getElementById('createFormDiv').classList.remove('hidden');
-        document.getElementById('joinFormDiv').classList.add('hidden');
-        document.getElementById('createMsg').textContent = '';
-    }
-
-    function showJoinForm() {
-        document.getElementById('joinFormDiv').classList.remove('hidden');
-        document.getElementById('createFormDiv').classList.add('hidden');
-        document.getElementById('joinMsg').textContent = '';
-    }
-
-    // ==================== СОЗДАНИЕ КОМНАТЫ ====================
+    
     async function createRoom() {
-        const roomName = document.getElementById('newRoomName').value.trim();
-        const password = document.getElementById('newRoomPass').value;
+        const roomName = document.getElementById('roomName').value.trim();
+        const password = document.getElementById('password').value;
         const msgDiv = document.getElementById('createMsg');
-
+        const loadingDiv = document.getElementById('createLoading');
+        
         if (!roomName || !password) {
             msgDiv.textContent = 'Заполните все поля';
             return;
         }
-        if (roomName.length < 3) {
-            msgDiv.textContent = 'Название минимум 3 символа';
-            return;
-        }
-
+        
+        loadingDiv.textContent = '⏳ Создание комнаты...';
+        
         try {
-            msgDiv.textContent = '⏳ Создание комнаты...';
-
-            const issues = await githubApi('issues?labels=room');
-            const existing = issues.find(i => i.title === roomName);
-
-            if (existing) {
-                msgDiv.textContent = '❌ Комната с таким названием уже существует';
-                return;
-            }
-
             const userId = Math.random().toString(36).substring(2, 15);
-
-            await githubApi('issues', 'POST', {
-                title: roomName,
-                body: JSON.stringify({
-                    password: password,
-                    adminId: userId,
-                    created: Date.now(),
-                    waiting: [],
-                    approved: []
-                }),
-                labels: ['room', `admin:${userId}`]
-            });
-
-            sessionStorage.setItem('telemest_admin', roomName);
-
-            msgDiv.textContent = '✅ Комната создана! Перенаправление...';
-            setTimeout(() => {
-                showPage('admin');
-                loadAdminData();
-            }, 1000);
-
+            const result = await callWorkflow('create_room', { room_name: roomName, password: password, user_id: userId });
+            
+            if (result.success) {
+                sessionStorage.setItem('adminRoom', roomName);
+                sessionStorage.setItem('adminId', userId);
+                loadingDiv.textContent = '✅ Комната создана!';
+                setTimeout(() => showAdminPanel(roomName), 1000);
+            } else {
+                msgDiv.textContent = '❌ ' + (result.error || 'Ошибка');
+                loadingDiv.textContent = '';
+            }
         } catch (err) {
-            console.error(err);
             msgDiv.textContent = '❌ Ошибка: ' + err.message;
+            loadingDiv.textContent = '';
         }
     }
-
-    // ==================== ПРИСОЕДИНЕНИЕ ====================
+    
     async function joinRoom() {
         const roomName = document.getElementById('joinRoomName').value.trim();
-        const password = document.getElementById('joinRoomPass').value;
+        const password = document.getElementById('joinPassword').value;
         const msgDiv = document.getElementById('joinMsg');
-
+        const loadingDiv = document.getElementById('joinLoading');
+        
         if (!roomName || !password) {
             msgDiv.textContent = 'Заполните все поля';
             return;
         }
-
+        
+        loadingDiv.textContent = '⏳ Поиск комнаты...';
+        
         try {
-            msgDiv.textContent = '⏳ Поиск комнаты...';
-
-            const issues = await githubApi('issues?labels=room');
-            const roomIssue = issues.find(i => i.title === roomName);
-
-            if (!roomIssue) {
-                msgDiv.textContent = '❌ Комната не найдена';
-                return;
-            }
-
-            const roomData = JSON.parse(roomIssue.body);
-
-            if (roomData.password !== password) {
-                msgDiv.textContent = '❌ Неверный пароль';
-                return;
-            }
-
             const userId = Math.random().toString(36).substring(2, 15);
-            sessionStorage.setItem('telemest_user', JSON.stringify({ room: roomName, userId: userId }));
-
-            if (!roomData.waiting) roomData.waiting = [];
-            roomData.waiting.push({ userId: userId, timestamp: Date.now() });
-
-            await githubApi(`issues/${roomIssue.number}`, 'PATCH', {
-                body: JSON.stringify(roomData)
-            });
-
-            await githubApi(`issues/${roomIssue.number}/comments`, 'POST', {
-                body: `🟡 Пользователь ${userId.substring(0, 8)} ожидает подтверждения`
-            });
-
-            msgDiv.textContent = '✅ Вход выполнен! Ожидайте подтверждения...';
-
-            showWaitingRoom(roomName, userId, roomIssue.number);
-
+            const result = await callWorkflow('join_room', { room_name: roomName, password: password, user_id: userId });
+            
+            if (result.success) {
+                sessionStorage.setItem('waitingRoom', roomName);
+                sessionStorage.setItem('userId', userId);
+                loadingDiv.textContent = '✅ Вход выполнен!';
+                setTimeout(() => showWaitingPanel(roomName, userId), 1000);
+            } else {
+                msgDiv.textContent = '❌ ' + (result.error || 'Ошибка');
+                loadingDiv.textContent = '';
+            }
         } catch (err) {
-            console.error(err);
             msgDiv.textContent = '❌ Ошибка: ' + err.message;
+            loadingDiv.textContent = '';
         }
     }
-
-    // ==================== ЗАЛ ОЖИДАНИЯ ====================
-    function showWaitingRoom(roomName, userId, issueNumber) {
-        document.getElementById('mainPage').classList.add('hidden');
-        document.getElementById('adminPage').classList.add('hidden');
-
-        const app = document.getElementById('app');
-        const waitingHtml = `
-            <div id="waitingPage">
-                <h2>⏳ Зал ожидания</h2>
-                <div class="spinner"></div>
-                <p>Ожидание подтверждения от администратора комнаты <strong>${roomName}</strong>...</p>
-                <button onclick="checkWaitingStatus('${roomName}', '${userId}', ${issueNumber})" style="margin-top:15px">🔄 Проверить</button>
-                <button onclick="location.reload()" style="margin-top:10px; background:#999">🏠 На главную</button>
-            </div>
-        `;
-
-        const existing = document.getElementById('waitingPage');
-        if (existing) existing.remove();
-        app.insertAdjacentHTML('beforeend', waitingHtml);
-
-        const interval = setInterval(() => {
-            checkWaitingStatus(roomName, userId, issueNumber, interval);
-        }, 5000);
-    }
-
-    async function checkWaitingStatus(roomName, userId, issueNumber, interval = null) {
-        try {
-            const issue = await githubApi(`issues/${issueNumber}`);
-            const roomData = JSON.parse(issue.body);
-
-            if (!roomData) {
-                document.getElementById('waitingPage').innerHTML = '<h2>🚪 Комната закрыта</h2><button onclick="location.reload()">Вернуться</button>';
-                if (interval) clearInterval(interval);
-                return;
+    
+    function showAdminPanel(roomName) {
+        document.getElementById('createForm').classList.add('hidden');
+        document.getElementById('joinForm').classList.add('hidden');
+        document.getElementById('adminPanel').classList.remove('hidden');
+        document.getElementById('adminRoomName').textContent = roomName;
+        
+        // Обновляем список ожидающих
+        setInterval(async () => {
+            const result = await callWorkflow('get_room', { room_name: roomName });
+            if (result.success && result.room && result.room.waiting) {
+                const listDiv = document.getElementById('waitingList');
+                if (result.room.waiting.length === 0) {
+                    listDiv.innerHTML = '<p>✨ Нет ожидающих</p>';
+                } else {
+                    let html = '';
+                    result.room.waiting.forEach(user => {
+                        html += `
+                            <div class="user-card">
+                                <span>👤 ${user.userId.substring(0, 8)}...</span>
+                                <div>
+                                    <button onclick="approveUser('${roomName}', '${user.userId}')" style="background:#27ae60;padding:5px 15px;border:none;border-radius:5px;cursor:pointer">✅</button>
+                                    <button onclick="rejectUser('${roomName}', '${user.userId}')" style="background:#e74c3c;padding:5px 15px;border:none;border-radius:5px;cursor:pointer">❌</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    listDiv.innerHTML = html;
+                }
             }
-
-            if (roomData.approved && roomData.approved.includes(userId)) {
-                document.getElementById('waitingPage').innerHTML = '<h2>✅ Доступ разрешен!</h2><p>Перенаправление...</p>';
-                if (interval) clearInterval(interval);
-                setTimeout(() => {
-                    showVideoRoom(roomName, userId);
-                }, 1500);
-                return;
-            }
-
-            if (roomData.rejected && roomData.rejected.includes(userId)) {
-                document.getElementById('waitingPage').innerHTML = '<h2>❌ Доступ отклонен</h2><button onclick="location.reload()">Вернуться</button>';
-                if (interval) clearInterval(interval);
-            }
-
-        } catch (err) {
-            console.error('Ошибка проверки:', err);
-        }
+        }, 3000);
     }
-
-    // ==================== ВИДЕО КОМНАТА ====================
-    function showVideoRoom(roomName, userId) {
-        const app = document.getElementById('app');
-        const videoHtml = `
-            <div id="videoPage">
-                <h1>🎬 Вы в телемосте!</h1>
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px; padding: 60px; margin: 30px 0; color: white;">
-                    🎥 Зона видеосвязи<br>
-                    <small>Здесь будет WebRTC</small>
-                </div>
-                <p>Комната: <strong>${roomName}</strong></p>
-                <button onclick="leaveRoom()">🚪 Покинуть комнату</button>
-            </div>
-        `;
-
-        const existing = document.getElementById('videoPage');
-        if (existing) existing.remove();
-        const existingWaiting = document.getElementById('waitingPage');
-        if (existingWaiting) existingWaiting.remove();
-
-        app.insertAdjacentHTML('beforeend', videoHtml);
+    
+    async function approveUser(roomName, userId) {
+        await callWorkflow('approve_user', { room_name: roomName, user_id: userId });
     }
-
-    function leaveRoom() {
+    
+    async function rejectUser(roomName, userId) {
+        await callWorkflow('reject_user', { room_name: roomName, user_id: userId });
+    }
+    
+    async function closeRoom() {
+        if (!confirm('Закрыть комнату?')) return;
+        sessionStorage.removeItem('adminRoom');
         location.reload();
     }
-
-    // ==================== АДМИН ПАНЕЛЬ ====================
-    async function loadAdminData() {
-        const adminRoom = sessionStorage.getItem('telemest_admin');
-        if (!adminRoom) {
-            document.getElementById('adminRoomInfo').innerHTML = '<p style="color:#999">Нет активной комнаты. Создайте новую.</p>';
-            document.getElementById('shareLink').innerHTML = '';
-            document.getElementById('waitingList').innerHTML = '<div class="empty">✨ Нет данных</div>';
-            return;
-        }
-
-        try {
-            const issues = await githubApi('issues?labels=room');
-            const roomIssue = issues.find(i => i.title === adminRoom);
-
-            if (!roomIssue) {
-                document.getElementById('adminRoomInfo').innerHTML = '<p style="color:#999">Комната не найдена</p>';
-                return;
+    
+    function showWaitingPanel(roomName, userId) {
+        document.getElementById('createForm').classList.add('hidden');
+        document.getElementById('joinForm').classList.add('hidden');
+        document.getElementById('waitingPanel').classList.remove('hidden');
+        
+        const interval = setInterval(async () => {
+            const result = await callWorkflow('get_room', { room_name: roomName });
+            if (result.success && result.room && result.room.approved && result.room.approved.includes(userId)) {
+                clearInterval(interval);
+                document.getElementById('waitingStatus').innerHTML = '✅ Доступ разрешен! Перенаправление...';
+                setTimeout(() => {
+                    document.getElementById('waitingPanel').classList.add('hidden');
+                    document.getElementById('videoPanel').classList.remove('hidden');
+                }, 1000);
             }
-
-            const roomData = JSON.parse(roomIssue.body);
-
-            document.getElementById('adminRoomInfo').innerHTML = `<p>Комната: <strong>${adminRoom}</strong></p>`;
-            document.getElementById('shareLink').innerHTML = `
-                🔗 Ссылка для приглашения:<br>
-                <code>${window.location.href.split('?')[0]}?room=${encodeURIComponent(adminRoom)}</code>
-                <button class="copy-btn" onclick="copyLink('${window.location.href.split('?')[0]}?room=${encodeURIComponent(adminRoom)}')">Копировать</button>
-                <div class="info" style="margin-top:8px">⚠️ Друзья должны открыть эту ссылку и ввести пароль "${roomData.password}"</div>
-            `;
-
-            const waiting = roomData.waiting || [];
-            if (waiting.length === 0) {
-                document.getElementById('waitingList').innerHTML = '<div class="empty">✨ Нет ожидающих пользователей</div>';
-                return;
-            }
-
-            let html = '';
-            waiting.forEach(user => {
-                html += `
-                    <div class="user-card">
-                        <div>
-                            <div>👤 Пользователь</div>
-                            <div class="status-badge">⏳ ожидает</div>
-                            <div class="user-id">ID: ${user.userId.substring(0, 8)}</div>
-                        </div>
-                        <div>
-                            <button class="create-btn" onclick="approveUser('${adminRoom}', '${user.userId}', ${roomIssue.number})" style="background:#27ae60; padding:6px 15px">✅</button>
-                            <button class="danger" onclick="rejectUser('${adminRoom}', '${user.userId}', ${roomIssue.number})" style="background:#e74c3c; padding:6px 15px; width:auto; margin-top:0">❌</button>
-                        </div>
-                    </div>
-                `;
-            });
-            document.getElementById('waitingList').innerHTML = html;
-
-        } catch (err) {
-            console.error(err);
-            document.getElementById('adminLoading').textContent = '⚠️ Ошибка загрузки: ' + err.message;
-        }
+        }, 3000);
     }
-
-    async function approveUser(roomName, userId, issueNumber) {
-        try {
-            const issue = await githubApi(`issues/${issueNumber}`);
-            const roomData = JSON.parse(issue.body);
-
-            roomData.waiting = (roomData.waiting || []).filter(u => u.userId !== userId);
-            if (!roomData.approved) roomData.approved = [];
-            roomData.approved.push(userId);
-
-            await githubApi(`issues/${issueNumber}`, 'PATCH', { body: JSON.stringify(roomData) });
-            await githubApi(`issues/${issueNumber}/comments`, 'POST', {
-                body: `✅ Пользователь ${userId.substring(0, 8)} получил доступ`
-            });
-
-            loadAdminData();
-        } catch (err) {
-            console.error(err);
-            alert('Ошибка: ' + err.message);
-        }
+    
+    function showCreate() {
+        document.getElementById('createForm').classList.remove('hidden');
+        document.getElementById('joinForm').classList.add('hidden');
     }
-
-    async function rejectUser(roomName, userId, issueNumber) {
-        try {
-            const issue = await githubApi(`issues/${issueNumber}`);
-            const roomData = JSON.parse(issue.body);
-
-            roomData.waiting = (roomData.waiting || []).filter(u => u.userId !== userId);
-            if (!roomData.rejected) roomData.rejected = [];
-            roomData.rejected.push(userId);
-
-            await githubApi(`issues/${issueNumber}`, 'PATCH', { body: JSON.stringify(roomData) });
-            await githubApi(`issues/${issueNumber}/comments`, 'POST', {
-                body: `❌ Пользователь ${userId.substring(0, 8)} получил отказ`
-            });
-
-            loadAdminData();
-        } catch (err) {
-            console.error(err);
-            alert('Ошибка: ' + err.message);
-        }
+    
+    function showJoin() {
+        document.getElementById('joinForm').classList.remove('hidden');
+        document.getElementById('createForm').classList.add('hidden');
     }
-
-    async function closeRoom() {
-        if (!confirm('Вы уверены? Комната будет удалена.')) return;
-
-        const adminRoom = sessionStorage.getItem('telemest_admin');
-        if (!adminRoom) return;
-
-        try {
-            const issues = await githubApi('issues?labels=room');
-            const roomIssue = issues.find(i => i.title === adminRoom);
-            if (roomIssue) {
-                await githubApi(`issues/${roomIssue.number}`, 'PATCH', { state: 'closed' });
-            }
-            sessionStorage.removeItem('telemest_admin');
-            location.reload();
-        } catch (err) {
-            console.error(err);
-            alert('Ошибка: ' + err.message);
-        }
-    }
-
-    function copyLink(link) {
-        navigator.clipboard.writeText(link);
-        alert('Ссылка скопирована!');
-    }
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const roomFromUrl = urlParams.get('room');
-    if (roomFromUrl) {
-        setTimeout(() => {
-            document.getElementById('joinRoomName').value = roomFromUrl;
-            showJoinForm();
-        }, 500);
-    }
+    
+    const adminRoom = sessionStorage.getItem('adminRoom');
+    if (adminRoom) showAdminPanel(adminRoom);
 </script>
 </body>
 </html>
