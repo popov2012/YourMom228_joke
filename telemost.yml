@@ -1,0 +1,133 @@
+name: Telemost API
+
+on:
+  repository_dispatch:
+    types: [create_room, join_room, approve_user, reject_user, get_room, delete_room]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Действие'
+        required: true
+        default: 'get_room'
+        type: choice
+        options:
+        - create_room
+        - join_room
+        - approve_user
+        - reject_user
+        - get_room
+        - delete_room
+      room_name:
+        description: 'Название комнаты'
+        required: false
+      password:
+        description: 'Пароль'
+        required: false
+      user_id:
+        description: 'ID пользователя'
+        required: false
+
+jobs:
+  handle-action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run action
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const action = context.payload.action || context.payload.inputs?.action;
+            const roomName = context.payload.client_payload?.room_name || context.payload.inputs?.room_name;
+            const password = context.payload.client_payload?.password || context.payload.inputs?.password;
+            const userId = context.payload.client_payload?.user_id || context.payload.inputs?.user_id;
+            const issueNumber = context.payload.client_payload?.issue_number;
+
+            const fs = require('fs');
+            const roomsFile = 'rooms.json';
+
+            let rooms = {};
+            if (fs.existsSync(roomsFile)) {
+              rooms = JSON.parse(fs.readFileSync(roomsFile, 'utf8'));
+            }
+
+            let result = { success: false };
+
+            switch(action) {
+              case 'create_room':
+                if (rooms[roomName]) {
+                  result = { success: false, error: 'Room already exists' };
+                } else {
+                  rooms[roomName] = {
+                    password: password,
+                    adminId: userId,
+                    created: Date.now(),
+                    waiting: [],
+                    approved: []
+                  };
+                  fs.writeFileSync(roomsFile, JSON.stringify(rooms, null, 2));
+                  result = { success: true, roomName: roomName };
+                }
+                break;
+
+              case 'join_room':
+                if (!rooms[roomName]) {
+                  result = { success: false, error: 'Room not found' };
+                } else if (rooms[roomName].password !== password) {
+                  result = { success: false, error: 'Wrong password' };
+                } else {
+                  rooms[roomName].waiting.push({ userId: userId, timestamp: Date.now() });
+                  fs.writeFileSync(roomsFile, JSON.stringify(rooms, null, 2));
+                  result = { success: true, status: 'waiting' };
+                }
+                break;
+
+              case 'approve_user':
+                if (rooms[roomName] && rooms[roomName].waiting) {
+                  rooms[roomName].waiting = rooms[roomName].waiting.filter(u => u.userId !== userId);
+                  if (!rooms[roomName].approved) rooms[roomName].approved = [];
+                  rooms[roomName].approved.push(userId);
+                  fs.writeFileSync(roomsFile, JSON.stringify(rooms, null, 2));
+                }
+                result = { success: true };
+                break;
+
+              case 'reject_user':
+                if (rooms[roomName] && rooms[roomName].waiting) {
+                  rooms[roomName].waiting = rooms[roomName].waiting.filter(u => u.userId !== userId);
+                  fs.writeFileSync(roomsFile, JSON.stringify(rooms, null, 2));
+                }
+                result = { success: true };
+                break;
+
+              case 'get_room':
+                result = { success: true, data: rooms[roomName] || null };
+                break;
+
+              case 'delete_room':
+                if (rooms[roomName]) {
+                  delete rooms[roomName];
+                  fs.writeFileSync(roomsFile, JSON.stringify(rooms, null, 2));
+                }
+                result = { success: true };
+                break;
+
+              default:
+                result = { success: false, error: 'Unknown action' };
+            }
+
+            if (issueNumber) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: JSON.stringify(result)
+              });
+            }
