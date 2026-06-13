@@ -34,6 +34,7 @@
             margin: 5px;
             font-size: 16px;
             font-weight: 600;
+            transition: 0.2s;
         }
         button:hover { transform: translateY(-2px); opacity: 0.9; }
         input {
@@ -44,6 +45,7 @@
             width: calc(100% - 24px);
             font-size: 16px;
         }
+        input:focus { outline: none; border-color: #764ba2; }
         .hidden { display: none; }
         .user-card {
             background: #f9f9f9;
@@ -70,12 +72,13 @@
         .danger { background: #e74c3c; }
         .btn-group { display: flex; gap: 10px; margin-bottom: 20px; }
         .btn-group button { flex: 1; }
+        .room-name { font-weight: bold; margin-bottom: 15px; }
     </style>
 </head>
 <body>
 <div class="container" id="app">
     <h1>🎥 Телемост</h1>
-
+    
     <div id="mainPage">
         <div class="btn-group">
             <button onclick="showCreate()">➕ Создать комнату</button>
@@ -105,7 +108,8 @@
 
     <div id="adminPage" class="hidden">
         <h3>👑 Панель администратора</h3>
-        <p><strong id="adminRoomName"></strong></p>
+        <div class="room-name" id="adminRoomName"></div>
+        <h3>👥 Зал ожидания</h3>
         <div id="waitingList"></div>
         <button class="danger" onclick="closeRoom()">🚪 Закрыть комнату</button>
     </div>
@@ -113,15 +117,16 @@
     <div id="waitingPage" class="hidden">
         <h3>⏳ Зал ожидания</h3>
         <div class="spinner"></div>
-        <p id="waitingStatus">Ожидание подтверждения...</p>
+        <p id="waitingStatus">Ожидание подтверждения от администратора...</p>
     </div>
 
     <div id="roomPage" class="hidden">
         <h3>🎬 Вы в телемосте!</h3>
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px; padding: 50px; margin: 20px 0; color: white;">
-            🎥 Зона видеосвязи
+            🎥 Зона видеосвязи<br>
+            <small>Здесь будет WebRTC</small>
         </div>
-        <button onclick="leaveRoom()">🚪 Выйти</button>
+        <button onclick="leaveRoom()">🚪 Покинуть комнату</button>
     </div>
 </div>
 
@@ -129,7 +134,7 @@
     const WORKER_URL = 'https://telemost-proxy.cherpopov.workers.dev';
     let adminInterval = null;
     let waitingInterval = null;
-
+    
     async function callWorker(action, payload) {
         const response = await fetch(WORKER_URL, {
             method: 'POST',
@@ -139,17 +144,19 @@
         if (!response.ok) throw new Error(await response.text());
         return await response.json();
     }
-
+    
     async function createRoom() {
         const roomName = document.getElementById('roomName').value.trim();
         const password = document.getElementById('roomPass').value;
         const msgDiv = document.getElementById('createMsg');
         const loading = document.getElementById('createLoading');
-
-        if (!roomName || !password) { msgDiv.textContent = 'Заполните всё'; return; }
+        
+        if (!roomName || !password) { msgDiv.textContent = 'Заполните все поля'; return; }
+        if (roomName.length < 3) { msgDiv.textContent = 'Название минимум 3 символа'; return; }
+        
         loading.style.display = 'block';
         msgDiv.textContent = '';
-
+        
         try {
             const userId = Math.random().toString(36).substring(2, 15);
             const result = await callWorker('create_room', { room_name: roomName, password, user_id: userId });
@@ -168,23 +175,25 @@
             loading.style.display = 'none';
         }
     }
-
+    
     async function joinRoom() {
         const roomName = document.getElementById('joinName').value.trim();
         const password = document.getElementById('joinPass').value;
         const msgDiv = document.getElementById('joinMsg');
         const loading = document.getElementById('joinLoading');
-
-        if (!roomName || !password) { msgDiv.textContent = 'Заполните всё'; return; }
+        
+        if (!roomName || !password) { msgDiv.textContent = 'Заполните все поля'; return; }
+        
         loading.style.display = 'block';
         msgDiv.textContent = '';
-
+        
         try {
             const userId = Math.random().toString(36).substring(2, 15);
             const result = await callWorker('join_room', { room_name: roomName, password, user_id: userId });
             if (result.success) {
                 sessionStorage.setItem('waitingRoom', roomName);
                 sessionStorage.setItem('waitingUserId', userId);
+                msgDiv.classList.add('success');
                 msgDiv.textContent = '✅ Ожидайте подтверждения...';
                 setTimeout(() => loadWaitingPanel(roomName, userId), 500);
             } else {
@@ -196,23 +205,24 @@
             loading.style.display = 'none';
         }
     }
-
+    
     async function loadAdminPanel(roomName) {
         document.getElementById('createPage').classList.add('hidden');
         document.getElementById('joinPage').classList.add('hidden');
         document.getElementById('mainPage').classList.add('hidden');
         document.getElementById('adminPage').classList.remove('hidden');
         document.getElementById('adminRoomName').textContent = roomName;
-
+        
         if (adminInterval) clearInterval(adminInterval);
-        adminInterval = setInterval(async () => {
+        
+        async function refreshWaiting() {
             try {
                 const result = await callWorker('get_room', { room_name: roomName });
                 if (result.success && result.data) {
                     const waiting = result.data.waiting || [];
                     const listDiv = document.getElementById('waitingList');
                     if (waiting.length === 0) {
-                        listDiv.innerHTML = '<p>✨ Нет ожидающих</p>';
+                        listDiv.innerHTML = '<p>✨ Нет ожидающих пользователей</p>';
                     } else {
                         let html = '';
                         waiting.forEach(user => {
@@ -220,8 +230,8 @@
                                 <div class="user-card">
                                     <span>👤 ${user.userId.substring(0, 8)}...</span>
                                     <div>
-                                        <button onclick="approveUser('${roomName}', '${user.userId}')" style="background:#27ae60;padding:5px 12px;margin:0 3px">✅</button>
-                                        <button onclick="rejectUser('${roomName}', '${user.userId}')" style="background:#e74c3c;padding:5px 12px;margin:0 3px">❌</button>
+                                        <button onclick="approveUser('${roomName}', '${user.userId}')" style="background:#27ae60;padding:5px 12px;margin:0 3px;border:none;border-radius:8px;cursor:pointer">✅</button>
+                                        <button onclick="rejectUser('${roomName}', '${user.userId}')" style="background:#e74c3c;padding:5px 12px;margin:0 3px;border:none;border-radius:8px;cursor:pointer">❌</button>
                                     </div>
                                 </div>
                             `;
@@ -229,77 +239,111 @@
                         listDiv.innerHTML = html;
                     }
                 }
-            } catch(e) { console.error(e); }
-        }, 3000);
+            } catch(e) {
+                console.error('Admin refresh error:', e);
+            }
+        }
+        
+        refreshWaiting();
+        adminInterval = setInterval(refreshWaiting, 2000);
     }
-
+    
     async function approveUser(roomName, userId) {
-        await callWorker('approve_user', { room_name: roomName, user_id: userId });
+        try {
+            await callWorker('approve_user', { room_name: roomName, user_id: userId });
+        } catch(e) {
+            console.error('Approve error:', e);
+        }
     }
-
+    
     async function rejectUser(roomName, userId) {
-        await callWorker('reject_user', { room_name: roomName, user_id: userId });
+        try {
+            await callWorker('reject_user', { room_name: roomName, user_id: userId });
+        } catch(e) {
+            console.error('Reject error:', e);
+        }
     }
-
+    
     async function closeRoom() {
-        if (!confirm('Закрыть комнату?')) return;
+        if (!confirm('Вы уверены? Комната будет удалена.')) return;
         const roomName = sessionStorage.getItem('adminRoom');
-        if (roomName) await callWorker('delete_room', { room_name: roomName });
-        sessionStorage.clear();
+        if (roomName) {
+            try {
+                await callWorker('delete_room', { room_name: roomName });
+            } catch(e) {}
+        }
+        sessionStorage.removeItem('adminRoom');
+        sessionStorage.removeItem('adminId');
         if (adminInterval) clearInterval(adminInterval);
         location.reload();
     }
-
+    
     async function loadWaitingPanel(roomName, userId) {
         document.getElementById('createPage').classList.add('hidden');
         document.getElementById('joinPage').classList.add('hidden');
         document.getElementById('mainPage').classList.add('hidden');
         document.getElementById('waitingPage').classList.remove('hidden');
-
+        
         if (waitingInterval) clearInterval(waitingInterval);
-        waitingInterval = setInterval(async () => {
+        
+        async function checkStatus() {
             try {
                 const result = await callWorker('get_room', { room_name: roomName });
                 if (result.success && result.data) {
                     const approved = result.data.approved || [];
                     if (approved.includes(userId)) {
                         clearInterval(waitingInterval);
-                        document.getElementById('waitingStatus').innerHTML = '✅ Доступ разрешён!';
+                        document.getElementById('waitingStatus').innerHTML = '✅ Доступ разрешен! Перенаправление...';
                         setTimeout(() => {
                             document.getElementById('waitingPage').classList.add('hidden');
                             document.getElementById('roomPage').classList.remove('hidden');
                         }, 1000);
                     }
                 }
-            } catch(e) { console.error(e); }
-        }, 3000);
+            } catch(e) {
+                console.error('Waiting check error:', e);
+            }
+        }
+        
+        checkStatus();
+        waitingInterval = setInterval(checkStatus, 2000);
     }
-
+    
     function showCreate() {
         document.getElementById('mainPage').classList.add('hidden');
         document.getElementById('createPage').classList.remove('hidden');
         document.getElementById('joinPage').classList.add('hidden');
+        document.getElementById('createMsg').textContent = '';
+        document.getElementById('createMsg').classList.remove('success');
     }
-
+    
     function showJoin() {
         document.getElementById('mainPage').classList.add('hidden');
         document.getElementById('createPage').classList.add('hidden');
         document.getElementById('joinPage').classList.remove('hidden');
+        document.getElementById('joinMsg').textContent = '';
+        document.getElementById('joinMsg').classList.remove('success');
     }
-
+    
     function backToMain() {
         document.getElementById('createPage').classList.add('hidden');
         document.getElementById('joinPage').classList.add('hidden');
         document.getElementById('mainPage').classList.remove('hidden');
     }
-
+    
     function leaveRoom() {
-        sessionStorage.clear();
+        sessionStorage.removeItem('waitingRoom');
+        sessionStorage.removeItem('waitingUserId');
         location.reload();
     }
-
-    if (sessionStorage.getItem('adminRoom')) loadAdminPanel(sessionStorage.getItem('adminRoom'));
-    if (sessionStorage.getItem('waitingRoom')) loadWaitingPanel(sessionStorage.getItem('waitingRoom'), sessionStorage.getItem('waitingUserId'));
+    
+    // Восстановление сессии при загрузке
+    const adminRoom = sessionStorage.getItem('adminRoom');
+    if (adminRoom) loadAdminPanel(adminRoom);
+    
+    const waitingRoom = sessionStorage.getItem('waitingRoom');
+    const waitingUserId = sessionStorage.getItem('waitingUserId');
+    if (waitingRoom && waitingUserId) loadWaitingPanel(waitingRoom, waitingUserId);
 </script>
 </body>
 </html>
