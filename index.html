@@ -70,6 +70,7 @@
         .btn-group { display: flex; gap: 10px; margin-bottom: 20px; }
         .btn-group button { flex: 1; }
         .room-name { font-weight: bold; margin-bottom: 15px; }
+        .check-btn { background: #2196F3; margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -81,7 +82,6 @@
             <button onclick="showCreate()">➕ Создать комнату</button>
             <button onclick="showJoin()">🔗 Присоединиться</button>
         </div>
-        <div class="error" style="font-size:12px; margin-top:15px;">⚠️ Комната живёт, пока админ держит вкладку открытой</div>
     </div>
 
     <div id="createPage" class="hidden">
@@ -91,6 +91,7 @@
         <button onclick="createRoom()">Создать</button>
         <button onclick="backToMain()">Назад</button>
         <div id="createMsg" class="error"></div>
+        <div id="createLoading" class="spinner" style="display:none"></div>
     </div>
 
     <div id="joinPage" class="hidden">
@@ -100,6 +101,7 @@
         <button onclick="joinRoom()">Войти</button>
         <button onclick="backToMain()">Назад</button>
         <div id="joinMsg" class="error"></div>
+        <div id="joinLoading" class="spinner" style="display:none"></div>
     </div>
 
     <div id="adminPage" class="hidden">
@@ -113,9 +115,9 @@
 
     <div id="waitingPage" class="hidden">
         <h3>⏳ Зал ожидания</h3>
-        <div class="spinner"></div>
+        <div class="spinner" id="waitingSpinner"></div>
         <p id="waitingStatus">Ожидание подтверждения от администратора...</p>
-        <button onclick="checkWaitingNow()" style="margin-top:15px; background:#2196F3">🔄 Проверить сейчас</button>
+        <button class="check-btn" onclick="checkWaitingNow()">🔄 Проверить сейчас</button>
     </div>
 
     <div id="roomPage" class="hidden">
@@ -129,21 +131,39 @@
 </div>
 
 <script>
-    // ==================== ПОЛНОСТЬЮ ЛОКАЛЬНАЯ ВЕРСИЯ (без Worker) ====================
+    const WORKER_URL = 'https://telemost-proxy.cherpopov.workers.dev';
     let adminInterval = null;
     let waitingInterval = null;
     let currentRoomData = null;
+    let currentUserId = null;
+    
+    async function callWorker(action, payload) {
+        try {
+            const response = await fetch(WORKER_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, payload })
+            });
+            if (!response.ok) throw new Error(await response.text());
+            return await response.json();
+        } catch (err) {
+            console.error('Worker error:', err);
+            throw err;
+        }
+    }
     
     function showCreate() {
         document.getElementById('mainPage').classList.add('hidden');
         document.getElementById('createPage').classList.remove('hidden');
         document.getElementById('joinPage').classList.add('hidden');
+        document.getElementById('createMsg').textContent = '';
     }
     
     function showJoin() {
         document.getElementById('mainPage').classList.add('hidden');
         document.getElementById('createPage').classList.add('hidden');
         document.getElementById('joinPage').classList.remove('hidden');
+        document.getElementById('joinMsg').textContent = '';
     }
     
     function backToMain() {
@@ -152,62 +172,70 @@
         document.getElementById('mainPage').classList.remove('hidden');
     }
     
-    function createRoom() {
+    async function createRoom() {
         const roomName = document.getElementById('roomName').value.trim();
         const password = document.getElementById('roomPass').value;
         const msgDiv = document.getElementById('createMsg');
+        const loading = document.getElementById('createLoading');
         
         if (!roomName || !password) { msgDiv.textContent = 'Заполните все поля'; return; }
         if (roomName.length < 3) { msgDiv.textContent = 'Название минимум 3 символа'; return; }
         
-        // Проверяем, нет ли уже такой комнаты в localStorage
-        const rooms = JSON.parse(localStorage.getItem('telemest_rooms') || '{}');
-        if (rooms[roomName]) { msgDiv.textContent = '❌ Комната уже существует'; return; }
+        loading.style.display = 'block';
+        msgDiv.textContent = '';
         
-        const adminId = Math.random().toString(36).substring(2, 15);
-        
-        rooms[roomName] = {
-            password: password,
-            adminId: adminId,
-            created: Date.now(),
-            waiting: [],
-            approved: []
-        };
-        localStorage.setItem('telemest_rooms', JSON.stringify(rooms));
-        sessionStorage.setItem('telemest_admin', roomName);
-        
-        msgDiv.classList.add('success');
-        msgDiv.textContent = '✅ Комната создана! Перенаправление...';
-        setTimeout(() => loadAdminPanel(roomName), 500);
+        try {
+            const userId = Math.random().toString(36).substring(2, 15);
+            const result = await callWorker('create_room', { room_name: roomName, password, user_id: userId });
+            if (result.success) {
+                sessionStorage.setItem('adminRoom', roomName);
+                sessionStorage.setItem('adminId', userId);
+                msgDiv.classList.add('success');
+                msgDiv.textContent = '✅ Комната создана!';
+                setTimeout(() => loadAdminPanel(roomName), 500);
+            } else {
+                msgDiv.textContent = '❌ ' + (result.error || 'Ошибка');
+            }
+        } catch (err) {
+            msgDiv.textContent = '❌ Ошибка соединения: ' + err.message;
+        } finally {
+            loading.style.display = 'none';
+        }
     }
     
-    function joinRoom() {
+    async function joinRoom() {
         const roomName = document.getElementById('joinName').value.trim();
         const password = document.getElementById('joinPass').value;
         const msgDiv = document.getElementById('joinMsg');
+        const loading = document.getElementById('joinLoading');
         
         if (!roomName || !password) { msgDiv.textContent = 'Заполните все поля'; return; }
         
-        const rooms = JSON.parse(localStorage.getItem('telemest_rooms') || '{}');
-        const room = rooms[roomName];
+        loading.style.display = 'block';
+        msgDiv.textContent = '';
         
-        if (!room) { msgDiv.textContent = '❌ Комната не найдена'; return; }
-        if (room.password !== password) { msgDiv.textContent = '❌ Неверный пароль'; return; }
-        
-        const userId = Math.random().toString(36).substring(2, 15);
-        
-        // Добавляем в зал ожидания
-        room.waiting.push({ userId: userId, timestamp: Date.now() });
-        localStorage.setItem('telemest_rooms', JSON.stringify(rooms));
-        
-        sessionStorage.setItem('telemest_waiting', JSON.stringify({ room: roomName, userId: userId }));
-        
-        msgDiv.classList.add('success');
-        msgDiv.textContent = '✅ Ожидайте подтверждения...';
-        setTimeout(() => loadWaitingPanel(roomName, userId), 500);
+        try {
+            const userId = Math.random().toString(36).substring(2, 15);
+            const result = await callWorker('join_room', { room_name: roomName, password, user_id: userId });
+            if (result.success) {
+                sessionStorage.setItem('waitingRoom', roomName);
+                sessionStorage.setItem('waitingUserId', userId);
+                currentRoomData = roomName;
+                currentUserId = userId;
+                msgDiv.classList.add('success');
+                msgDiv.textContent = '✅ Ожидайте подтверждения...';
+                setTimeout(() => loadWaitingPanel(roomName, userId), 500);
+            } else {
+                msgDiv.textContent = '❌ ' + (result.error || 'Ошибка');
+            }
+        } catch (err) {
+            msgDiv.textContent = '❌ Ошибка соединения: ' + err.message;
+        } finally {
+            loading.style.display = 'none';
+        }
     }
     
-    function loadAdminPanel(roomName) {
+    async function loadAdminPanel(roomName) {
         document.getElementById('createPage').classList.add('hidden');
         document.getElementById('joinPage').classList.add('hidden');
         document.getElementById('mainPage').classList.add('hidden');
@@ -215,67 +243,60 @@
         document.getElementById('adminRoomName').textContent = roomName;
         
         const inviteLink = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(roomName)}`;
-        document.getElementById('adminLink').innerHTML = `🔗 Ссылка: <a href="${inviteLink}" target="_blank">${inviteLink}</a><br><span style="font-size:10px;">Пароль: тот, который ты ввёл при создании</span>`;
+        document.getElementById('adminLink').innerHTML = `🔗 Ссылка: <a href="${inviteLink}" target="_blank">${inviteLink}</a>`;
         
         if (adminInterval) clearInterval(adminInterval);
         
-        function refreshWaiting() {
-            const rooms = JSON.parse(localStorage.getItem('telemest_rooms') || '{}');
-            const room = rooms[roomName];
-            if (!room) { closeRoom(); return; }
-            
-            const waiting = room.waiting || [];
-            const listDiv = document.getElementById('waitingList');
-            if (waiting.length === 0) {
-                listDiv.innerHTML = '<p>✨ Нет ожидающих пользователей</p>';
-            } else {
-                let html = '';
-                waiting.forEach(user => {
-                    html += `
-                        <div class="user-card">
-                            <span>👤 ${user.userId.substring(0, 8)}...</span>
-                            <div>
-                                <button onclick="approveUser('${roomName}', '${user.userId}')" style="background:#27ae60;padding:5px 12px;margin:0 3px;border:none;border-radius:8px;cursor:pointer">✅</button>
-                                <button onclick="rejectUser('${roomName}', '${user.userId}')" style="background:#e74c3c;padding:5px 12px;margin:0 3px;border:none;border-radius:8px;cursor:pointer">❌</button>
-                            </div>
-                        </div>
-                    `;
-                });
-                listDiv.innerHTML = html;
+        async function refreshWaiting() {
+            try {
+                const result = await callWorker('get_room', { room_name: roomName });
+                if (result.success && result.data) {
+                    const waiting = result.data.waiting || [];
+                    const listDiv = document.getElementById('waitingList');
+                    if (waiting.length === 0) {
+                        listDiv.innerHTML = '<p>✨ Нет ожидающих пользователей</p>';
+                    } else {
+                        let html = '';
+                        waiting.forEach(user => {
+                            html += `
+                                <div class="user-card">
+                                    <span>👤 ${user.userId.substring(0, 8)}...</span>
+                                    <div>
+                                        <button onclick="approveUser('${roomName}', '${user.userId}')" style="background:#27ae60;padding:5px 12px;margin:0 3px;border:none;border-radius:8px;cursor:pointer">✅</button>
+                                        <button onclick="rejectUser('${roomName}', '${user.userId}')" style="background:#e74c3c;padding:5px 12px;margin:0 3px;border:none;border-radius:8px;cursor:pointer">❌</button>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        listDiv.innerHTML = html;
+                    }
+                }
+            } catch(e) {
+                console.error('Refresh error:', e);
             }
         }
         
         refreshWaiting();
-        adminInterval = setInterval(refreshWaiting, 2000);
+        adminInterval = setInterval(refreshWaiting, 3000);
     }
     
-    function approveUser(roomName, userId) {
-        const rooms = JSON.parse(localStorage.getItem('telemest_rooms') || '{}');
-        const room = rooms[roomName];
-        if (room && room.waiting) {
-            room.waiting = room.waiting.filter(u => u.userId !== userId);
-            if (!room.approved) room.approved = [];
-            if (!room.approved.includes(userId)) room.approved.push(userId);
-            localStorage.setItem('telemest_rooms', JSON.stringify(rooms));
-        }
+    async function approveUser(roomName, userId) {
+        try {
+            await callWorker('approve_user', { room_name: roomName, user_id: userId });
+        } catch(e) { console.error(e); }
     }
     
-    function rejectUser(roomName, userId) {
-        const rooms = JSON.parse(localStorage.getItem('telemest_rooms') || '{}');
-        const room = rooms[roomName];
-        if (room && room.waiting) {
-            room.waiting = room.waiting.filter(u => u.userId !== userId);
-            localStorage.setItem('telemest_rooms', JSON.stringify(rooms));
-        }
+    async function rejectUser(roomName, userId) {
+        try {
+            await callWorker('reject_user', { room_name: roomName, user_id: userId });
+        } catch(e) { console.error(e); }
     }
     
-    function closeRoom() {
+    async function closeRoom() {
         if (!confirm('Вы уверены? Комната будет удалена.')) return;
-        const roomName = sessionStorage.getItem('telemest_admin');
+        const roomName = sessionStorage.getItem('adminRoom');
         if (roomName) {
-            const rooms = JSON.parse(localStorage.getItem('telemest_rooms') || '{}');
-            delete rooms[roomName];
-            localStorage.setItem('telemest_rooms', JSON.stringify(rooms));
+            try { await callWorker('delete_room', { room_name: roomName }); } catch(e) {}
         }
         sessionStorage.clear();
         if (adminInterval) clearInterval(adminInterval);
@@ -290,50 +311,48 @@
         
         if (waitingInterval) clearInterval(waitingInterval);
         
-        function checkStatus() {
-            const rooms = JSON.parse(localStorage.getItem('telemest_rooms') || '{}');
-            const room = rooms[roomName];
-            if (!room) {
-                clearInterval(waitingInterval);
-                document.getElementById('waitingStatus').innerHTML = '🚪 Комната закрыта администратором';
-                return;
-            }
-            const approved = room.approved || [];
-            if (approved.includes(userId)) {
-                clearInterval(waitingInterval);
-                document.getElementById('waitingStatus').innerHTML = '✅ Доступ разрешен! Перенаправление...';
-                document.getElementById('spinner').style.display = 'none';
-                setTimeout(() => {
-                    document.getElementById('waitingPage').classList.add('hidden');
-                    document.getElementById('roomPage').classList.remove('hidden');
-                }, 1000);
+        async function checkStatus() {
+            try {
+                const result = await callWorker('get_room', { room_name: roomName });
+                if (result.success && result.data) {
+                    const approved = result.data.approved || [];
+                    if (approved.includes(userId)) {
+                        clearInterval(waitingInterval);
+                        document.getElementById('waitingStatus').innerHTML = '✅ Доступ разрешен! Перенаправление...';
+                        document.getElementById('waitingSpinner').style.display = 'none';
+                        setTimeout(() => {
+                            document.getElementById('waitingPage').classList.add('hidden');
+                            document.getElementById('roomPage').classList.remove('hidden');
+                        }, 1000);
+                    }
+                }
+            } catch(e) {
+                document.getElementById('waitingStatus').innerHTML = '⚠️ Ошибка связи. Нажмите "Проверить сейчас"';
+                document.getElementById('waitingSpinner').style.display = 'none';
             }
         }
         
         window.checkWaitingNow = checkStatus;
         
         checkStatus();
-        waitingInterval = setInterval(checkStatus, 3000);
+        waitingInterval = setInterval(checkStatus, 5000);
     }
     
     function leaveRoom() {
-        sessionStorage.removeItem('telemest_waiting');
+        sessionStorage.removeItem('waitingRoom');
+        sessionStorage.removeItem('waitingUserId');
         location.reload();
     }
     
-    // Проверяем, есть ли активная сессия
-    const adminRoom = sessionStorage.getItem('telemest_admin');
+    const adminRoom = sessionStorage.getItem('adminRoom');
     if (adminRoom) loadAdminPanel(adminRoom);
     
-    const waitingData = sessionStorage.getItem('telemest_waiting');
-    if (waitingData) {
-        const { room, userId } = JSON.parse(waitingData);
-        loadWaitingPanel(room, userId);
-    }
+    const waitingRoom = sessionStorage.getItem('waitingRoom');
+    const waitingUserId = sessionStorage.getItem('waitingUserId');
+    if (waitingRoom && waitingUserId) loadWaitingPanel(waitingRoom, waitingUserId);
     
-    // Если в URL есть параметр ?room= - открываем форму присоединения
     const urlRoom = new URLSearchParams(window.location.search).get('room');
-    if (urlRoom && !adminRoom && !waitingData) {
+    if (urlRoom && !adminRoom && !waitingRoom) {
         document.getElementById('joinName').value = urlRoom;
         showJoin();
     }
